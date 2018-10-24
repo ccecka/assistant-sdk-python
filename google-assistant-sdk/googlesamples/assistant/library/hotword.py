@@ -34,6 +34,16 @@ try:
 except NameError:
     FileNotFoundError = IOError
 
+custom_commands = {"TV off": "echo 'standby 0' | cec-client -s -d 1",
+                   "TV on": "echo 'on 0' | cec-client -s -d 1",
+                   "TV input cast": "echo 'tx 4F:82:10:00' | cec-client -s -d 1",
+                   "TV input pie": "echo 'tx 4F:82:20:00' | cec-client -s -d 1",
+                   "TV input external": "echo 'tx 4F:82:30:00' | cec-client -s -d 1"}
+
+import RPi.GPIO as GPIO
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(25, GPIO.OUT)
+GPIO.output(25, GPIO.LOW)
 
 WARNING_NOT_REGISTERED = """
     This device is not registered. This means you will not be able to use
@@ -44,7 +54,7 @@ WARNING_NOT_REGISTERED = """
 """
 
 
-def process_event(event):
+def process_event(event, assistant):
     """Pretty prints events.
 
     Prints all events that occur with two spaces between each new
@@ -53,15 +63,23 @@ def process_event(event):
     Args:
         event(event.Event): The current event to process.
     """
-    if event.type == EventType.ON_CONVERSATION_TURN_STARTED:
-        print()
-
+    if (event.type == EventType.ON_CONVERSATION_TURN_STARTED):
+        GPIO.output(25, GPIO.HIGH)
+        print()                                                    
+        
     print(event)
 
+    if (event.type == EventType.ON_RECOGNIZING_SPEECH_FINISHED and event.args):
+        if (event.args['text'] in custom_commands):
+            assistant.stop_conversation()
+            os.system(custom_commands[event.args['text']])
+    
     if (event.type == EventType.ON_CONVERSATION_TURN_FINISHED and
             event.args and not event.args['with_follow_on_turn']):
+        GPIO.output(25, GPIO.LOW)
         print()
-    if event.type == EventType.ON_DEVICE_ACTION:
+        
+    if (event.type == EventType.ON_DEVICE_ACTION):
         for command, params in event.actions:
             print('Do command', command, 'with params', str(params))
 
@@ -142,7 +160,7 @@ def main():
                 print(WARNING_NOT_REGISTERED)
 
         for event in events:
-            process_event(event)
+            process_event(event, assistant)
 
 
 if __name__ == '__main__':
